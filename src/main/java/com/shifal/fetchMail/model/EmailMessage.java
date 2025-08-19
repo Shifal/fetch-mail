@@ -17,7 +17,6 @@ public class EmailMessage {
     private String to;
     private String replyTo;
     private Instant date;
-    @JsonProperty("mailed-by")
     private String mailedBy;
     private String signedBy;
     private List<String> labels;

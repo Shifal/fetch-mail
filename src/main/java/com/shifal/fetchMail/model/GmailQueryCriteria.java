@@ -11,9 +11,6 @@ public class GmailQueryCriteria {
     private String subject;
     private String from;
     private String to;
-    private String mailedBy;
-    private String signedBy;
-    private String replyTo;
 
     @Min(1)
     @Max(100)
@@ -31,15 +28,6 @@ public class GmailQueryCriteria {
 
     public String getTo() { return to; }
     public void setTo(String to) { this.to = to; }
-
-    public String getMailedBy() { return mailedBy; }
-    public void setMailedBy(String mailedBy) { this.mailedBy = mailedBy; }
-
-    public String getSignedBy() { return signedBy; }
-    public void setSignedBy(String signedBy) { this.signedBy = signedBy; }
-
-    public String getReplyTo() { return replyTo; }
-    public void setReplyTo(String replyTo) { this.replyTo = replyTo; }
 
     public Integer getMaxResults() { return maxResults; }
     public void setMaxResults(Integer maxResults) { this.maxResults = maxResults; }

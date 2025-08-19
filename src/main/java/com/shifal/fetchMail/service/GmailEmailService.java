@@ -48,9 +48,6 @@ public class GmailEmailService implements EmailService {
 
             // Post-filters for headers Gmail query can’t handle
             if (criteria.getTo() != null && !dto.getTo().contains(criteria.getTo())) continue;
-            if (criteria.getMailedBy() != null && !dto.getMailedBy().contains(criteria.getMailedBy())) continue;
-            if (criteria.getSignedBy() != null && !dto.getSignedBy().contains(criteria.getSignedBy())) continue;
-            if (criteria.getReplyTo() != null && !dto.getReplyTo().contains(criteria.getReplyTo())) continue;
 
             result.add(dto);
         }
