@@ -1,0 +1,3 @@
+app:
+  gmail:
+    tokens-directory: tokens
