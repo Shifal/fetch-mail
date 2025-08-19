@@ -3,8 +3,6 @@ package com.shifal.fetchMail.controller;
 import com.shifal.fetchMail.model.EmailMessage;
 import com.shifal.fetchMail.model.GmailQueryCriteria;
 import com.shifal.fetchMail.service.EmailService;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,25 +19,18 @@ public class EmailController {
         this.service = service;
     }
 
+    /**
+     * Search emails with optional criteria.
+     * Automatically maps query parameters to GmailQueryCriteria.
+     */
     @GetMapping
-    public List<EmailMessage> search(
-            @RequestParam(required = false) String subject,
-            @RequestParam(required = false) String from,
-            @RequestParam(required = false) String to,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer maxResults,
-            @RequestParam(required = false) String pageToken
-    ) throws Exception {
-
-        GmailQueryCriteria criteria = new GmailQueryCriteria();
-        criteria.setSubject(subject);
-        criteria.setFrom(from);
-        criteria.setTo(to);
-        criteria.setMaxResults(maxResults);
-        criteria.setPageToken(pageToken);
-
+    public List<EmailMessage> search(@ModelAttribute @Validated GmailQueryCriteria criteria) throws Exception {
         return service.search(criteria);
     }
 
+    /**
+     * Get a single email by ID.
+     */
     @GetMapping("/{id}")
     public EmailMessage getById(@PathVariable String id) throws Exception {
         return service.getById(id);

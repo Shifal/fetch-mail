@@ -1,13 +1,8 @@
 package com.shifal.fetchMail.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.time.Instant;
 import java.util.List;
 
-/**
- * DTO returned by REST API. Keeps Gmail internals out of the public model.
- */
 public class EmailMessage {
     private String id;
     private String threadId;
@@ -23,7 +18,6 @@ public class EmailMessage {
 
     public EmailMessage() {}
 
-    // Getters / setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 

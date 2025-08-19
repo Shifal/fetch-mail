@@ -1,34 +1,19 @@
 package com.shifal.fetchMail.model;
 
 /**
- * Request body for searching emails.
- * Supports from, to, and subject filters only.
+ * Represents a request body for searching emails.
+ * Supports filtering by 'from', 'to', and 'subject' fields.
  */
 public class GmailSearchRequest {
-    private String from;
+
     private String to;
-    private String subject;
-
-    public GmailSearchRequest() {}
-
-    public String getFrom() {
-        return from;
-    }
-    public void setFrom(String from) {
-        this.from = from;
-    }
 
     public String getTo() {
         return to;
     }
+
     public void setTo(String to) {
         this.to = to;
     }
 
-    public String getSubject() {
-        return subject;
-    }
-    public void setSubject(String subject) {
-        this.subject = subject;
-    }
 }

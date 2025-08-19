@@ -28,53 +28,46 @@ public class GmailEmailService implements EmailService {
         Gmail gmail = clientProvider.getClient();
         String query = buildGmailQuery(criteria);
 
-        Gmail.Users.Messages.List listCall = gmail.users().messages()
-                .list(userId).setQ(query)
-                .setMaxResults(Long.valueOf(
-                        Optional.ofNullable(criteria.getMaxResults()).orElse(20)));
+        Gmail.Users.Messages.List listCall = gmail.users()
+                .messages()
+                .list(userId)
+                .setQ(query)
+                .setMaxResults(Optional.ofNullable(criteria.getMaxResults()).map(Long::valueOf).orElse(20L));
 
         if (criteria.getPageToken() != null && !criteria.getPageToken().isBlank()) {
             listCall.setPageToken(criteria.getPageToken());
         }
 
         ListMessagesResponse resp = listCall.execute();
-        if (resp.getMessages() == null || resp.getMessages().isEmpty()) {
-            return Collections.emptyList();
-        }
+        if (resp.getMessages() == null || resp.getMessages().isEmpty()) return Collections.emptyList();
 
         List<EmailMessage> result = new ArrayList<>();
         for (Message m : resp.getMessages()) {
             EmailMessage dto = fetchAndMap(gmail, m.getId());
 
-            // Post-filters for headers Gmail query can’t handle
-            if (criteria.getTo() != null && !dto.getTo().contains(criteria.getTo())) continue;
-
-            result.add(dto);
+            // Gmail query can't fully filter "To", so post-filter
+            if (criteria.getTo() == null || dto.getTo().contains(criteria.getTo())) {
+                result.add(dto);
+            }
         }
         return result;
     }
 
     @Override
     public EmailMessage getById(String id) throws Exception {
-        Gmail gmail = clientProvider.getClient();
-        return fetchAndMap(gmail, id);
+        return fetchAndMap(clientProvider.getClient(), id);
     }
 
     private String buildGmailQuery(GmailQueryCriteria c) {
         List<String> parts = new ArrayList<>();
-        if (c.getSubject() != null && !c.getSubject().isBlank()) {
-            parts.add("subject:\"" + escape(c.getSubject()) + "\"");
-        }
-        if (c.getFrom() != null && !c.getFrom().isBlank()) {
-            parts.add("from:\"" + escape(c.getFrom()) + "\"");
-        }
-        if (c.getTo() != null && !c.getTo().isBlank()) {
-            parts.add("to:\"" + escape(c.getTo()) + "\"");
-        }
-        if (parts.isEmpty()) {
-            parts.add("newer_than:1d"); // safety default
-        }
-        return String.join(" ", parts);
+        if (notBlank(c.getSubject())) parts.add("subject:\"" + escape(c.getSubject()) + "\"");
+        if (notBlank(c.getFrom())) parts.add("from:\"" + escape(c.getFrom()) + "\"");
+        if (notBlank(c.getTo())) parts.add("to:\"" + escape(c.getTo()) + "\"");
+        return parts.isEmpty() ? "newer_than:1d" : String.join(" ", parts);
+    }
+
+    private boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     private String escape(String s) {
@@ -82,10 +75,12 @@ public class GmailEmailService implements EmailService {
     }
 
     private EmailMessage fetchAndMap(Gmail gmail, String messageId) throws Exception {
-        Message msg = gmail.users().messages().get(userId, messageId)
+        Message msg = gmail.users()
+                .messages()
+                .get(userId, messageId)
                 .setFormat("metadata")
                 .setMetadataHeaders(List.of(
-                        "Subject","From","To","Date","Reply-To","Return-Path","Authentication-Results"
+                        "Subject", "From", "To", "Date", "Reply-To", "Return-Path", "Authentication-Results"
                 ))
                 .execute();
 
@@ -94,56 +89,48 @@ public class GmailEmailService implements EmailService {
         EmailMessage dto = new EmailMessage();
         dto.setId(msg.getId());
         dto.setThreadId(msg.getThreadId());
-        dto.setSnippet(msg.getSnippet() != null ? msg.getSnippet() : "");
+        dto.setSnippet(Optional.ofNullable(msg.getSnippet()).orElse(""));
         dto.setSubject(headers.getOrDefault("Subject", ""));
         dto.setFrom(headers.getOrDefault("From", ""));
         dto.setTo(headers.getOrDefault("To", ""));
         dto.setReplyTo(headers.getOrDefault("Reply-To", ""));
         dto.setDate(Instant.ofEpochMilli(Optional.ofNullable(msg.getInternalDate()).orElse(0L)));
-        dto.setMailedBy(deriveMailedBy(dto.getFrom(), headers));
-        dto.setSignedBy(extractSignedBy(headers));
+        dto.setMailedBy(getMailedBy(dto.getFrom(), headers));
+        dto.setSignedBy(getSignedBy(headers));
         dto.setLabels(msg.getLabelIds());
+
         return dto;
     }
 
-    private Map<String,String> headersToMap(List<MessagePartHeader> headers) {
-        Map<String,String> map = new LinkedHashMap<>();
-        if (headers == null) return map;
-        for (MessagePartHeader h : headers) {
-            map.put(h.getName(), h.getValue());
-        }
+    private Map<String, String> headersToMap(List<MessagePartHeader> headers) {
+        if (headers == null) return Collections.emptyMap();
+        Map<String, String> map = new LinkedHashMap<>();
+        for (MessagePartHeader h : headers) map.put(h.getName(), h.getValue());
         return map;
     }
 
-    private String deriveMailedBy(String from, Map<String,String> headers) {
-        String domain = extractDomainFromEmail(from);
+    private String getMailedBy(String from, Map<String, String> headers) {
+        String domain = extractDomain(from);
         if (domain != null) return domain;
-        domain = extractDomainFromEmail(headers.getOrDefault("Return-Path", ""));
-        return domain != null ? domain : "";
+        return Optional.ofNullable(extractDomain(headers.get("Return-Path"))).orElse("");
     }
 
-    private String extractDomainFromEmail(String headerVal) {
-        if (headerVal == null) return null;
-        String v = headerVal.trim();
-        int lt = v.indexOf('<');
-        int gt = v.indexOf('>');
-        if (lt >= 0 && gt > lt) v = v.substring(lt+1, gt);
+    private String extractDomain(String email) {
+        if (email == null || email.isBlank()) return null;
+        String v = email.trim();
+        int lt = v.indexOf('<'), gt = v.indexOf('>');
+        if (lt >= 0 && gt > lt) v = v.substring(lt + 1, gt);
         int at = v.lastIndexOf('@');
-        if (at > 0 && at < v.length() - 1) {
-            return v.substring(at + 1).replace(">", "").replace("\"", "").trim();
-        }
-        return null;
+        return (at > 0 && at < v.length() - 1) ? v.substring(at + 1).replace(">", "").replace("\"", "").trim() : null;
     }
 
-    private String extractSignedBy(Map<String,String> headers) {
+    private String getSignedBy(Map<String, String> headers) {
         String auth = headers.getOrDefault("Authentication-Results", "");
         if (auth.contains("dkim=pass") && auth.contains("header.d=")) {
             int idx = auth.indexOf("header.d=");
-            if (idx >= 0) {
-                String sub = auth.substring(idx + 9);
-                int end = sub.indexOf(';');
-                return (end > 0 ? sub.substring(0, end) : sub).trim();
-            }
+            String sub = auth.substring(idx + 9);
+            int end = sub.indexOf(';');
+            return (end > 0 ? sub.substring(0, end) : sub).trim();
         }
         return "";
     }

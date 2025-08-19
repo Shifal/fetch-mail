@@ -32,15 +32,19 @@ public class GmailConfig implements GmailClientProvider {
     public Gmail getClient() throws Exception {
         NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
 
+        // Load client secrets
         InputStream in = getClass().getClassLoader().getResourceAsStream("credentials.json");
         if (in == null) {
             throw new IllegalStateException("credentials.json not found in src/main/resources.");
         }
-
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
+        // Build authorization flow
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                httpTransport, JSON_FACTORY, clientSecrets, List.of(GmailScopes.GMAIL_READONLY))
+                httpTransport,
+                JSON_FACTORY,
+                clientSecrets,
+                List.of(GmailScopes.GMAIL_READONLY))
                 .setDataStoreFactory(new FileDataStoreFactory(Path.of(tokensDirectory).toFile()))
                 .setAccessType("offline")
                 .build();
