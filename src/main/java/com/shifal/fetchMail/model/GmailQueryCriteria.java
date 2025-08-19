@@ -11,7 +11,6 @@ public class GmailQueryCriteria {
     private String subject;
     private String from;
     private String to;
-    @JsonProperty("mailed-by")
     private String mailedBy;
     private String signedBy;
     private String replyTo;

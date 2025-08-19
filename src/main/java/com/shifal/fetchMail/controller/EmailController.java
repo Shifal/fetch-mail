@@ -26,9 +26,6 @@ public class EmailController {
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
-            @RequestParam(required = false) String mailedBy,
-            @RequestParam(required = false) String signedBy,
-            @RequestParam(required = false) String replyTo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer maxResults,
             @RequestParam(required = false) String pageToken
     ) throws Exception {
@@ -37,9 +34,6 @@ public class EmailController {
         criteria.setSubject(subject);
         criteria.setFrom(from);
         criteria.setTo(to);
-        criteria.setMailedBy(mailedBy);
-        criteria.setSignedBy(signedBy);
-        criteria.setReplyTo(replyTo);
         criteria.setMaxResults(maxResults);
         criteria.setPageToken(pageToken);
 
