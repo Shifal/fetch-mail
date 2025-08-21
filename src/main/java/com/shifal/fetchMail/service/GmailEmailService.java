@@ -7,6 +7,10 @@ import com.shifal.fetchMail.model.EmailMessage;
 import com.shifal.fetchMail.model.GmailQueryCriteria;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import com.shifal.fetchMail.model.GmailFetchRequest;
+import com.shifal.fetchMail.model.EmailFullWithAttachments;
+import com.google.api.services.gmail.model.MessagePart;
+import com.google.api.services.gmail.model.MessagePartBody;
 
 import java.time.Instant;
 import java.util.*;
@@ -134,4 +138,94 @@ public class GmailEmailService implements EmailService {
         }
         return "";
     }
+
+    public List<EmailFullWithAttachments> fetchEmailsWithAttachments(GmailFetchRequest request) throws Exception {
+        Gmail gmail = clientProvider.getClient();
+        List<Message> messages = new ArrayList<>();
+
+        if (request.getTo() != null && !request.getTo().isBlank()) {
+            messages.add(gmail.users().messages().get(userId, request.getTo()).setFormat("full").execute());
+        } else {
+            StringBuilder query = new StringBuilder();
+            if (request.getFrom() != null && !request.getFrom().isBlank()) query.append("from:").append(request.getFrom()).append(" ");
+            if (request.getSubject() != null && !request.getSubject().isBlank()) query.append("subject:").append(request.getSubject()).append(" ");
+            if (request.getTo() != null && !request.getTo().isBlank()) query.append("to:").append(request.getTo()).append(" ");
+            if (query.isEmpty()) query.append("newer_than:1d");
+
+            ListMessagesResponse resp = gmail.users().messages().list(userId)
+                    .setQ(query.toString().trim())
+                    .setMaxResults(Optional.ofNullable(request.getMaxResults()).map(Long::valueOf).orElse(20L))
+                    .execute();
+
+            if (resp.getMessages() != null) {
+                for (Message m : resp.getMessages()) {
+                    messages.add(gmail.users().messages().get(userId, m.getId()).setFormat("full").execute());
+                }
+            }
+        }
+
+        List<EmailFullWithAttachments> result = new ArrayList<>();
+        for (Message msg : messages) {
+            EmailFullWithAttachments dto = new EmailFullWithAttachments();
+
+            Map<String, String> headers = new LinkedHashMap<>();
+            for (MessagePartHeader h : msg.getPayload().getHeaders()) headers.put(h.getName(), h.getValue());
+
+            dto.setId(msg.getId());
+            dto.setThreadId(msg.getThreadId());
+            dto.setSnippet(Optional.ofNullable(msg.getSnippet()).orElse(""));
+            dto.setSubject(headers.getOrDefault("Subject", ""));
+            dto.setFrom(headers.getOrDefault("From", ""));
+            dto.setTo(headers.getOrDefault("To", ""));
+            dto.setReplyTo(headers.getOrDefault("Reply-To", ""));
+            dto.setDate(Instant.ofEpochMilli(Optional.ofNullable(msg.getInternalDate()).orElse(0L)));
+            dto.setMailedBy(getMailedBy(dto.getFrom(), headers));
+            dto.setSignedBy(getSignedBy(headers));
+            dto.setLabels(msg.getLabelIds());
+
+            Map<String, String> attachments = new LinkedHashMap<>();
+            extractAttachmentsFull(msg.getPayload(), attachments, gmail, msg.getId());
+            dto.setAttachmentFiles(attachments);
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+
+
+    // Recursive method to extract attachments
+    private void extractAttachmentsFull(MessagePart part, Map<String, String> attachments, Gmail gmail, String messageId) throws Exception {
+        if (part.getParts() != null && !part.getParts().isEmpty()) {
+            for (MessagePart p : part.getParts()) {
+                extractAttachmentsFull(p, attachments, gmail, messageId);
+            }
+        } else {
+            String filename = part.getFilename();
+            String mimeType = part.getMimeType();
+
+            if (filename != null && !filename.isBlank() &&
+                    (mimeType.contains("application/pdf") ||
+                            mimeType.contains("application/msword") ||
+                            mimeType.contains("application/vnd.openxmlformats-officedocument") ||
+                            mimeType.startsWith("image/"))) {
+
+                if (part.getBody() != null && part.getBody().getAttachmentId() != null) {
+                    String attachId = part.getBody().getAttachmentId();
+                    MessagePartBody attachPart = gmail.users().messages()
+                            .attachments()
+                            .get(userId, messageId, attachId)
+                            .execute();
+
+                    // Decode Gmail URL-safe Base64 and encode normal Base64
+                    byte[] fileBytes = Base64.getUrlDecoder().decode(attachPart.getData());
+                    String base64Content = Base64.getEncoder().encodeToString(fileBytes);
+
+                    attachments.put(filename, base64Content);
+                }
+            }
+        }
+    }
+
 }
